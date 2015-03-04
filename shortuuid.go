@@ -1,6 +1,7 @@
 package shortuuid
 
 import (
+	"fmt"
 	"github.com/satori/go.uuid"
 	"math"
 	"math/big"
@@ -50,16 +51,29 @@ func (s *ShortUUID) SetAlphabet(alphabet string) {
 	for _, a := range alphabet {
 		set.Add(string(a))
 	}
+	set.Sort()
 	s.alphabet = set
 }
 
 func (s ShortUUID) String() string {
-	return ""
+	return s.encode()
 }
 
+func (s ShortUUID) FromString(input string) (*ShortUUID, error) {
+	_uuid, err := uuid.FromString(s.stringToNum(input))
+	if err != nil {
+		return nil, err
+	}
+	s2 := &ShortUUID{name: s.name, uuid: _uuid, alphabet: s.alphabet}
+	return s2, nil
+}
+
+// Encodes a UUID into a string (LSB first) according to the alphabet
+// If leftmost (MSB) bits 0, string might be shorter
 func (s *ShortUUID) encode() string {
 	padLen := s.encodeLen(len(s.uuid.Bytes()))
-	return s.numToString(1, padLen)
+	number := uuidToInt(s.uuid)
+	return s.numToString(number, padLen)
 }
 
 func (s *ShortUUID) encodeLen(numBytes int) int {
@@ -69,9 +83,31 @@ func (s *ShortUUID) encodeLen(numBytes int) int {
 }
 
 //Covert a number to a string, using the given alphabet.
-func (s *ShortUUID) numToString(number int, padToLen int) string {
+func (s *ShortUUID) numToString(number *big.Int, padToLen int) string {
+	output := ""
+	var digit *big.Int
+	for number.Int64() > 0 {
+		number, digit = new(big.Int).DivMod(number, big.NewInt(int64(s.alphabet.Len())), new(big.Int))
+		output += s.alphabet.ItemByIndex(int(digit.Int64()))
+	}
+	if padToLen > 0 {
+		remainer := math.Max(float64(padToLen)-float64(len(output)), 0)
+		output = output + strings.Repeat(s.alphabet.ItemByIndex(0), int(remainer))
+	}
 
-	return ""
+	return output
+}
+
+// Convert a string to a number(based uuid string),using the given alphabet.
+func (s *ShortUUID) stringToNum(input string) string {
+	i := 0
+	for _, c := range input {
+		i = i*s.alphabet.Len() + s.alphabet.Index(string(c))
+	}
+
+	x := fmt.Sprintf("%x", i)
+	x = x[0:8] + "-" + x[8:12] + "-" + x[12:16] + "-" + x[16:20] + "-" + x[20:32]
+	return x
 }
 
 func uuidToInt(_uuid uuid.UUID) *big.Int {
