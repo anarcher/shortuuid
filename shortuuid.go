@@ -86,7 +86,7 @@ func (s *ShortUUID) encodeLen(numBytes int) int {
 func (s *ShortUUID) numToString(number *big.Int, padToLen int) string {
 	output := ""
 	var digit *big.Int
-	for number.Int64() > 0 {
+	for number.Uint64() > 0 {
 		number, digit = new(big.Int).DivMod(number, big.NewInt(int64(s.alphabet.Len())), new(big.Int))
 		output += s.alphabet.ItemByIndex(int(digit.Int64()))
 	}
