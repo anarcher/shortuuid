@@ -13,32 +13,18 @@ const (
 )
 
 type ShortUUID struct {
-	name     string
 	alphabet *StringSet
-	uuid     uuid.UUID
 }
 
-func NewDefault() *ShortUUID {
-	return New("", "")
+func New() *ShortUUID {
+	suid := &ShortUUID{}
+	suid.SetAlphabet(DEFAULT_ALPHABET)
+	return suid
 }
 
-func NewWithName(name string) *ShortUUID {
-	return New(name, "")
-}
+func NewWithAlphabet(alphabet string) *ShortUUID {
 
-func New(name, alphabet string) *ShortUUID {
-
-	var _uuid uuid.UUID
-	if name == "" {
-		_uuid = uuid.NewV4()
-	} else if strings.HasPrefix(name, "http") {
-		_uuid = uuid.NewV5(uuid.NamespaceDNS, name)
-	} else {
-		_uuid = uuid.NewV5(uuid.NamespaceURL, name)
-	}
-
-	suuid := &ShortUUID{uuid: _uuid}
-
+	suuid := &ShortUUID{}
 	if alphabet == "" {
 		alphabet = DEFAULT_ALPHABET
 	}
@@ -56,24 +42,33 @@ func (s *ShortUUID) SetAlphabet(alphabet string) {
 }
 
 func (s ShortUUID) String() string {
-	return s.encode()
+	return s.UUID("")
 }
 
-func (s ShortUUID) FromString(input string) (*ShortUUID, error) {
-	_uuid, err := uuid.FromString(s.stringToNum(input))
-	if err != nil {
-		return nil, err
+func (s *ShortUUID) UUID(name string) string {
+	var _uuid uuid.UUID
+	if name == "" {
+		_uuid = uuid.NewV4()
+	} else if strings.HasPrefix(name, "http") {
+		_uuid = uuid.NewV5(uuid.NamespaceDNS, name)
+	} else {
+		_uuid = uuid.NewV5(uuid.NamespaceURL, name)
 	}
-	s2 := &ShortUUID{name: s.name, uuid: _uuid, alphabet: s.alphabet}
-	return s2, nil
+
+	return s.Encode(_uuid)
 }
 
 // Encodes a UUID into a string (LSB first) according to the alphabet
 // If leftmost (MSB) bits 0, string might be shorter
-func (s *ShortUUID) encode() string {
-	padLen := s.encodeLen(len(s.uuid.Bytes()))
-	number := uuidToInt(s.uuid)
+func (s *ShortUUID) Encode(uuid uuid.UUID) string {
+	padLen := s.encodeLen(len(uuid.Bytes()))
+	number := uuidToInt(uuid)
 	return s.numToString(number, padLen)
+}
+
+func (s *ShortUUID) Decode(input string) (uuid.UUID, error) {
+	_uuid, err := uuid.FromString(s.stringToNum(input))
+	return _uuid, err
 }
 
 func (s *ShortUUID) encodeLen(numBytes int) int {
@@ -100,12 +95,13 @@ func (s *ShortUUID) numToString(number *big.Int, padToLen int) string {
 
 // Convert a string to a number(based uuid string),using the given alphabet.
 func (s *ShortUUID) stringToNum(input string) string {
-	i := 0
-	for _, c := range input {
-		i = i*s.alphabet.Len() + s.alphabet.Index(string(c))
+	n := big.NewInt(0)
+	for i := len(input) - 1; i >= 0; i-- {
+		n.Mul(n, big.NewInt(int64(s.alphabet.Len())))
+		n.Add(n, big.NewInt(int64(s.alphabet.Index(string(input[i])))))
 	}
 
-	x := fmt.Sprintf("%x", i)
+	x := fmt.Sprintf("%x", n)
 	x = x[0:8] + "-" + x[8:12] + "-" + x[12:16] + "-" + x[16:20] + "-" + x[20:32]
 	return x
 }
